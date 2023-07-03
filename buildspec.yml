@@ -1,0 +1,24 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+  pre_build:
+    commands:
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | sed 's|https://||' | docker login --username AWS --password-stdin $AWS_ACCOUNT
+      - VERSION=1.0.0
+  build:
+    commands:
+      - echo $AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+      - docker login --username $DOCKERHUB_USERNAME --password $DOCKERHUB_PASS
+      - docker build -t $CONTAINER:$VERSION .
+      - docker tag $CONTAINER:$VERSION $AWS_ACCOUNT/$CONTAINER:$VERSION
+  post_build:
+    commands:
+      - aws ecr batch-delete-image --repository-name $CONTAINER --image-ids imageTag=$VERSION
+      - docker push $AWS_ACCOUNT/$CONTAINER:$VERSION
+      - printf '[{"name":"chroma-container","imageUri":"%s"}]' $AWS_ACCOUNT/$CONTAINER:$VERSION > imagedefinitions.json
+      - cat imagedefinitions.json
+artifacts:
+  files: imagedefinitions.json
